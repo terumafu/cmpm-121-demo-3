@@ -29,11 +29,12 @@ export class Cache implements Momento<string> {
 
   fromMomento(momento: string) {
     this.coins = [];
-    const coins = JSON.parse(momento);
-    for (let n = 0; n < coins.length; n++) {
-      const parsedcoin: Coin = { cell: coins[n].cell, serial: coins[n].serial };
-      this.coins.push(parsedcoin);
-    }
+    const savedCache = JSON.parse(momento);
+    this.coins = savedCache.coins;
+    //for (let n = 0; n < coins.length; n++) {
+    //const parsedcoin: Coin = { cell: coins[n].cell, serial: coins[n].serial };
+    //this.coins.push(parsedcoin);
+    //}
   }
 }
 
@@ -60,14 +61,15 @@ export class Board {
     //if not known, create a cell, if known, return cell
     if (!this.knownCells.has(key)) {
       this.knownCells.set(key, { xindex, yindex });
+      //console.log("i havent seen this cell before!")
     }
     return this.knownCells.get(key)!;
   }
 
   getCellForPoint(point: leaflet.LatLng): Cell {
     return this.getCanonicalCell({
-      xindex: point.lat / this.tileWidth,
-      yindex: point.lng / this.tileWidth,
+      xindex: Math.floor(point.lat / this.tileWidth),
+      yindex: Math.floor(point.lng / this.tileWidth),
     });
   }
 
@@ -82,31 +84,33 @@ export class Board {
     const resultCells: Cell[] = [];
     const originCell = this.getCellForPoint(point);
 
-    console.log(point);
+    //console.log(point);
     for (
       let x = -this.tileVisibilityRadius;
-      x <= this.tileVisibilityRadius;
+      x < this.tileVisibilityRadius;
       x++
     ) {
       for (
         let y = -this.tileVisibilityRadius;
-        y <= this.tileVisibilityRadius;
+        y < this.tileVisibilityRadius;
         y++
       ) {
         if (
-          luck([originCell.xindex + x, originCell.xindex + y].toString()) <
+          luck([originCell.xindex + x, originCell.yindex + y].toString()) <
             this.cacheSpawnProbability
         ) {
           //console.log("this happens at:" + originCell.xindex + x + "," + originCell.yindex + y);
-          const latlng = {
-            xindex: originCell.xindex + x,
-            yindex: originCell.yindex + y,
-          };
-          resultCells.push(this.getCanonicalCell(latlng));
+          const lat = x + originCell.xindex;
+          const lng = y + originCell.yindex;
+          if (luck([lat, lng].toString()) < this.cacheSpawnProbability) {
+            resultCells.push(
+              this.getCanonicalCell({ xindex: lat, yindex: lng }),
+            );
+          }
         }
         //resultCells.push(this.getCanonicalCell({xindex: originCell.xindex + x, yindex: originCell.yindex + y}));
-        console.log(originCell.xindex + x);
-        console.log(originCell.yindex + y);
+        //console.log(originCell.xindex + x);
+        //console.log(originCell.yindex + y);
       }
     }
     //console.log(resultCells);

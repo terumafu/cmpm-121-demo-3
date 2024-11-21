@@ -11,7 +11,7 @@ import "./leafletWorkaround.ts";
 // Deterministic random number generator
 import luck from "./luck.ts";
 
-import { Board, Coin } from "./board.ts";
+import { Board, Cache, Coin } from "./board.ts";
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
 const NULL_ISLAND = leaflet.latLng(0, 0);
 const GAMEPLAY_ZOOM_LEVEL = 19;
@@ -24,7 +24,8 @@ const board = new Board(
   NEIGHBORHOOD_SIZE,
   CACHE_SPAWN_PROBABILITY,
 );
-const cacheMap = new Map<string, Coin[]>();
+const cacheMap = new Map<string, Cache>();
+const momentoMap = new Map<string, string>();
 
 const playerCoins: Coin[] = [];
 // Create the map (element with id "map" is defined in index.html)
@@ -67,15 +68,25 @@ function move_player(lat: number, long: number) {
   );
   redrawMap();
 }
+
 function redrawMap() {
   map.eachLayer((layer) => {
     if (!(layer instanceof leaflet.TileLayer)) {
       map.removeLayer(layer);
     }
   });
+  cache_map_to_momento(); // turns the cache map into momento strings, cache objects that are not on screen get sent into the momento map until revealed
   playerMarker.addTo(map);
   load_cells();
 }
+
+function cache_map_to_momento() {
+  cacheMap.forEach((_value, key) => {
+    const compressed_cache = cacheMap.get(key)!.toMomento();
+    momentoMap.set(key, compressed_cache);
+  });
+}
+
 function initialize_movement_buttons() {
   [
     { id: "north", lat: TILE_DEGREES, lng: 0 },
@@ -115,7 +126,7 @@ function spawnCache(i: number, j: number) {
       j * TILE_DEGREES,
     ),
   );
-  //console.log(cell);
+
   //bounds of the rectangle created
 
   const bounds = board.getCellBounds(cell);
@@ -123,24 +134,30 @@ function spawnCache(i: number, j: number) {
   // Add a rectangle to the map to represent the cache
   const rect = leaflet.rectangle(bounds); // takes in a latLngBounds Object as coordinates for a rectangle
   rect.addTo(map);
-  //console.log(rect)
+
   //create cache if there is no cache
   const cacheKey = getCacheKey(cell.xindex, cell.yindex);
-  if (!cacheMap.has(cacheKey)) { //if it doenst have an element tied to the key, add an empty array
-    cacheMap.set(cacheKey, []);
+  if (!momentoMap.has(cacheKey)) { // creates coins in cache
+    cacheMap.set(cacheKey, new Cache());
     for (
       let n = 0;
       n < luck([cell.xindex, cell.yindex, "initialValue"].toString()) * 5;
       n++
     ) {
-      cacheMap.get(cacheKey)!.push({ cell: cell, serial: n });
+      cacheMap.get(cacheKey)!.coins.push({ cell: cell, serial: n });
     }
+  } else {
+    const newCache = new Cache();
+    newCache.fromMomento(momentoMap.get(cacheKey)!);
+    momentoMap.delete(cacheKey);
+    //console.log(newCache)
+    cacheMap.set(cacheKey, newCache);
   }
 
   // Handle interactions with the cache
   rect.bindPopup(() => {
     // Each cache has a random point value, mutable by the player
-    const coins: Coin[] = cacheMap.get(cacheKey)!;
+    const coins: Coin[] = cacheMap.get(cacheKey)!.coins;
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `
@@ -157,9 +174,8 @@ function spawnCache(i: number, j: number) {
       .querySelector<HTMLButtonElement>("#withdraw")!
       .addEventListener("click", () => {
         if (coins.length > 0) {
-          //console.log(coins);
           playerCoins.push(coins.pop()!);
-          //console.log(coins);
+
           //takes the largest serial number coin
 
           // Update coin list in cache
@@ -179,7 +195,7 @@ function spawnCache(i: number, j: number) {
           // Update coin list in cache
           update_cache_coinlist(popupText!, coins);
 
-          //up;date player coin list
+          //update player coin list
           update_player_coinlist();
         }
       });
@@ -192,7 +208,6 @@ function update_cache_coinlist(htmlSE: HTMLSpanElement, coinList: Coin[]) {
   for (let i = 0; i < coinList.length; i++) {
     htmlSE!.innerHTML += coin_to_string(coinList[i]);
   }
-  console.log(htmlSE.innerHTML);
 }
 function update_player_coinlist() {
   statusPanel.innerHTML = "";
@@ -204,19 +219,3 @@ function coin_to_string(coin: Coin) {
   return coin.cell.xindex.toFixed(2) + ":" + coin.cell.yindex.toFixed(2) + "#" +
     coin.serial + "<br />";
 }
-
-//const currLoc = playerMarker.getLatLng()
-// Look around the player's neighborhood for caches to spawn
-//for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-//for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
-// If location i,j is lucky enough, spawn a cache!
-
-//const currLat = currLoc.lat + i;
-//const currLong = currLoc.lng + j;
-//if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-//create_unique_string(i,j)
-//spawnCache(currLat, currLong);
-//console.log(i,j)
-//}
-//}
-//}
