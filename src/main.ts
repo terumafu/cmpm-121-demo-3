@@ -55,11 +55,46 @@ playerMarker.addTo(map);
 playerMarker.setLatLng(
   leaflet.latLng(OAKES_CLASSROOM),
 );
+load_cells();
+
+initialize_movement_buttons();
+function move_player(lat: number, long: number) {
+  playerMarker.setLatLng(
+    {
+      lat: playerMarker.getLatLng().lat + lat,
+      lng: playerMarker.getLatLng().lng + long,
+    },
+  );
+  redrawMap();
+}
+function redrawMap() {
+  map.eachLayer((layer) => {
+    if (!(layer instanceof leaflet.TileLayer)) {
+      map.removeLayer(layer);
+    }
+  });
+  playerMarker.addTo(map);
+  load_cells();
+}
+function initialize_movement_buttons() {
+  [
+    { id: "north", lat: TILE_DEGREES, lng: 0 },
+    { id: "south", lat: -TILE_DEGREES, lng: 0 },
+    { id: "west", lat: 0, lng: -TILE_DEGREES },
+    { id: "east", lat: 0, lng: TILE_DEGREES },
+  ].forEach(({ id, lat, lng }) => {
+    document
+      .getElementById(id)!
+      .addEventListener("click", () => move_player(lat, lng));
+  });
+}
 
 //load cells near player
-board.getCellsNearPoint(playerMarker.getLatLng()).forEach((cell) => {
-  spawnCache(cell.xindex, cell.yindex);
-});
+function load_cells() {
+  board.getCellsNearPoint(playerMarker.getLatLng()).forEach((cell) => {
+    spawnCache(cell.xindex, cell.yindex);
+  });
+}
 
 // Display the player's points
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!; // element `statusPanel` is defined in index.html
@@ -80,7 +115,7 @@ function spawnCache(i: number, j: number) {
       j * TILE_DEGREES,
     ),
   );
-  console.log(cell);
+  //console.log(cell);
   //bounds of the rectangle created
 
   const bounds = board.getCellBounds(cell);
@@ -109,10 +144,8 @@ function spawnCache(i: number, j: number) {
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `
-                <div>There is a cache here at "${
-      (cell.xindex * TILE_DEGREES).toFixed(2)
-    },${
-      (cell.yindex * TILE_DEGREES).toFixed(2)
+                <div>There is a cache here at "${cell.xindex.toFixed(2)},${
+      cell.yindex.toFixed(2)
     }".  It has coins: <span id='value'></span></div>
                 
                 
@@ -124,9 +157,9 @@ function spawnCache(i: number, j: number) {
       .querySelector<HTMLButtonElement>("#withdraw")!
       .addEventListener("click", () => {
         if (coins.length > 0) {
-          console.log(coins);
+          //console.log(coins);
           playerCoins.push(coins.pop()!);
-          console.log(coins);
+          //console.log(coins);
           //takes the largest serial number coin
 
           // Update coin list in cache

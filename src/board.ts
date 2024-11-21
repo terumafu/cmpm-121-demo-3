@@ -11,8 +11,30 @@ export interface Coin {
   serial: number;
 }
 
-export interface Cache {
+interface Momento<T> {
+  toMomento(): T;
+  fromMomento(momento: T): void;
+}
+
+export class Cache implements Momento<string> {
   coins: Coin[];
+  constructor() {
+    this.coins = [];
+  }
+  toMomento() {
+    return JSON.stringify({
+      coins: this.coins,
+    });
+  }
+
+  fromMomento(momento: string) {
+    this.coins = [];
+    const coins = JSON.parse(momento);
+    for (let n = 0; n < coins.length; n++) {
+      const parsedcoin: Coin = { cell: coins[n].cell, serial: coins[n].serial };
+      this.coins.push(parsedcoin);
+    }
+  }
 }
 
 export class Board {
@@ -59,6 +81,8 @@ export class Board {
   getCellsNearPoint(point: leaflet.LatLng): Cell[] {
     const resultCells: Cell[] = [];
     const originCell = this.getCellForPoint(point);
+
+    console.log(point);
     for (
       let x = -this.tileVisibilityRadius;
       x <= this.tileVisibilityRadius;
@@ -73,15 +97,19 @@ export class Board {
           luck([originCell.xindex + x, originCell.xindex + y].toString()) <
             this.cacheSpawnProbability
         ) {
+          //console.log("this happens at:" + originCell.xindex + x + "," + originCell.yindex + y);
           const latlng = {
             xindex: originCell.xindex + x,
             yindex: originCell.yindex + y,
           };
           resultCells.push(this.getCanonicalCell(latlng));
         }
+        //resultCells.push(this.getCanonicalCell({xindex: originCell.xindex + x, yindex: originCell.yindex + y}));
+        console.log(originCell.xindex + x);
+        console.log(originCell.yindex + y);
       }
     }
-    console.log(resultCells);
+    //console.log(resultCells);
     return resultCells;
   }
 }
