@@ -1,5 +1,5 @@
 // @deno-types="npm:@types/leaflet@^1.9.14"
-import leaflet from "leaflet";
+import leaflet, { LatLngExpression } from "leaflet";
 
 // Style sheets
 import "leaflet/dist/leaflet.css";
@@ -25,9 +25,9 @@ const board = new Board(
   CACHE_SPAWN_PROBABILITY,
 );
 const cacheMap = new Map<string, Cache>();
-const momentoMap = new Map<string, string>();
-
-const playerCoins: Coin[] = [];
+let momentoMap: Map<string, string>;
+let playerCoins: Coin[];
+let polyLineMap: LatLngExpression[][];
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(document.getElementById("map")!, {
   center: OAKES_CLASSROOM,
@@ -52,20 +52,18 @@ const playerMarker = leaflet.marker(NULL_ISLAND);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-//move player
-playerMarker.setLatLng(
-  leaflet.latLng(OAKES_CLASSROOM),
-);
-load_cells();
-
 initialize_movement_buttons();
+
 function move_player(lat: number, long: number) {
+  const fromCoords = playerMarker.getLatLng();
   playerMarker.setLatLng(
     {
       lat: playerMarker.getLatLng().lat + lat,
       lng: playerMarker.getLatLng().lng + long,
     },
   );
+  const toCoords = playerMarker.getLatLng();
+  polyLineMap.push([fromCoords, toCoords]);
   redrawMap();
 }
 
@@ -77,6 +75,10 @@ function redrawMap() {
   });
   cache_map_to_momento(); // turns the cache map into momento strings, cache objects that are not on screen get sent into the momento map until revealed
   playerMarker.addTo(map);
+  map.setView(playerMarker.getLatLng(), GAMEPLAY_ZOOM_LEVEL);
+  for (let i = 0; i < polyLineMap.length; i++) {
+    leaflet.polyline(polyLineMap[i], { color: "red" }).addTo(map);
+  }
   load_cells();
 }
 
@@ -99,6 +101,32 @@ function initialize_movement_buttons() {
       .addEventListener("click", () => move_player(lat, lng));
   });
 }
+map.on("locationfound", onLocationFound);
+function onLocationFound(e: leaflet.LocationEvent) {
+  playerMarker.setLatLng(e.latlng);
+  console.log("locationfound");
+  // newPolyline(playerMarker.getLatLng());
+  //bus.dispatchEvent(new Event("player-moved"));
+  map.setView(playerMarker.getLatLng(), GAMEPLAY_ZOOM_LEVEL);
+  redrawMap();
+}
+
+// initializes location button
+document.getElementById("location")!.addEventListener("click", () => {
+  map.locate({ setView: true, watch: true, maxZoom: GAMEPLAY_ZOOM_LEVEL });
+  console.log("button pressed");
+
+  //playerMarker.setLatLng(location.options.center!);
+
+  //map.on("locationfound", onLocationFound);
+  //map.on("locationerror", onLocationError);
+  //polylines.createPolyline();
+});
+//initializes reset button
+document.getElementById("reset")!.addEventListener("click", () => {
+  localStorage.clear();
+  restorePlayerData();
+});
 
 //load cells near player
 function load_cells() {
@@ -211,6 +239,7 @@ function update_cache_coinlist(htmlSE: HTMLSpanElement, coinList: Coin[]) {
 }
 function update_player_coinlist() {
   statusPanel.innerHTML = "";
+
   for (let i = 0; i < playerCoins.length; i++) {
     statusPanel!.innerHTML += coin_to_string(playerCoins[i]);
   }
@@ -218,4 +247,88 @@ function update_player_coinlist() {
 function coin_to_string(coin: Coin) {
   return coin.cell.xindex.toFixed(2) + ":" + coin.cell.yindex.toFixed(2) + "#" +
     coin.serial + "<br />";
+}
+
+globalThis.addEventListener("beforeunload", savePlayerData);
+globalThis.addEventListener("load", restorePlayerData);
+
+//i need to unload cachemap and then store momento map and playerCoins;
+
+function savePlayerData() {
+  console.log("this happens");
+  cache_map_to_momento();
+  localStorage.setItem("momento", JSON.stringify(momentoMap));
+  console.log("this happens");
+  stringifyMap("momento", momentoMap);
+  localStorage.setItem("polyline", JSON.stringify(polyLineMap));
+
+  localStorage.setItem("playerCoins", JSON.stringify(playerCoins));
+  localStorage.setItem(
+    "playerlocation",
+    JSON.stringify({
+      x: playerMarker.getLatLng().lat,
+      y: playerMarker.getLatLng().lng,
+    }),
+  );
+}
+//turns a map into a dictionary so that it is easily stringified
+function stringifyMap(name: string, map: Map<string, string>) {
+  const obj: { [key: string]: string } = {};
+  map.forEach((value, key) => {
+    obj[key] = value;
+  });
+
+  const JSONString: string = JSON.stringify(obj);
+  localStorage.setItem(name, JSONString);
+}
+//converts dictionary back into map
+function unStringifyMap(name: string) {
+  const obj = JSON.parse(localStorage.getItem(name)!)!;
+  console.log(obj);
+  for (const key in obj) {
+    momentoMap.set(key, obj[key]);
+  }
+}
+//called on loading in the page
+function restorePlayerData() {
+  momentoMap = new Map<string, string>();
+  unStringifyMap("momento");
+  console.log(momentoMap);
+  console.log(localStorage.getItem("playerCoins"));
+
+  if (
+    localStorage.getItem("playerCoins") !== undefined &&
+    localStorage.getItem("playerCoins") !== null
+  ) {
+    console.log("playercoins");
+    playerCoins = JSON.parse(localStorage.getItem("playerCoins")!)!;
+  } else {
+    playerCoins = [];
+  }
+  console.log(localStorage.getItem("playerlocation") !== undefined);
+  console.log(localStorage.getItem("playerlocation") !== null);
+  if (
+    localStorage.getItem("playerlocation") !== undefined &&
+    localStorage.getItem("playerlocation") !== null
+  ) {
+    const temp = JSON.parse(localStorage.getItem("playerlocation")!)!;
+    console.log(temp);
+    playerMarker.setLatLng({
+      lat: temp.x,
+      lng: temp.y,
+    });
+  } else {
+    console.log("location reset");
+    playerMarker.setLatLng(OAKES_CLASSROOM);
+  }
+  if (
+    localStorage.getItem("polyline") !== undefined &&
+    localStorage.getItem("polyline") !== null
+  ) {
+    polyLineMap = JSON.parse(localStorage.getItem("polyline")!)!;
+  } else {
+    polyLineMap = [];
+  }
+  redrawMap();
+  update_player_coinlist();
 }
